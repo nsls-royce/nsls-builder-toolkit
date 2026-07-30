@@ -111,6 +111,27 @@ Host: HubSpot form embedded on a landing page (faculty-facing). **TO CONFIRM** �
 
 ## 5. Workflow logic (on form submission)
 
+### 5.0 Reference: the existing referral workflow (`493077772`) — mapped 2026-07-30
+"Referral Program - Log, Create Contact, Email, Task" — **ON**, object-based, enrolls **Log** records.
+- **Trigger:** `Log created < 1 day AND Log Type = Referral` — **does NOT filter on `referral_type`**, re-enrollment ON.
+- Steps: hardcoded one-off branch (cruft) → set `referee_email` from Log Name (referral-form hack) →
+  enrich `referrer_*` from the associated "first created" contact → template Log Name → set status
+  `Pending` → branch on `referee_blurb_options` → delays → email/task. No deal creation, no reward assignment.
+
+> **⚠️ Collision risk (do this first):** because the trigger fires on *any* `Log Type = Referral`,
+> a nomination Log created with that type will auto-enroll here and run chapter-referral automation.
+> **Before creating any nomination Logs:** add a `referral_type ≠ Student Nomination` exclusion to
+> `493077772`, and build the nomination workflow as a separate clone scoped to
+> `Log Type = Referral AND referral_type = Student Nomination`.
+
+**Reuses cleanly:** trigger pattern · referrer enrichment from associated contact · `Pending` status ·
+Log-name templating · the referee/student contact-creation step.
+**Must rebuild:** the `referee_email = Log Name` hack (form populates `referee_email` directly) ·
+the `referee_blurb_options` email/task branch (replace with student apply-email + task + consent gate) ·
+drop the hardcoded one-off branch.
+
+### 5.1 Nomination workflow (cloned + scoped)
+
 Clone the referral workflow's record-creation + association logic, then:
 
 1. **Create Log record** (`log type` = nomination), stamp submission data.
@@ -125,7 +146,7 @@ Clone the referral workflow's record-creation + association logic, then:
    - Create a **rep task** to reach out (backup).
 7. **Consent = No ("I'll forward")** → no student outreach; optional internal note on the Log.
 
-### 5.1 Enrollment & task ownership
+### 5.2 Enrollment & task ownership
 - **Emails send from Joanne** (she enrolls, or enrollment workflow sends as her).
 - **Call tasks** created by the sequence are **rotated/divvied** to the contractor/callers via a
   workflow owner-rotation action (e.g., contractor takes the bulk, split configurable). Test the split.
