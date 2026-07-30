@@ -2,7 +2,7 @@
 
 **Owner (build):** Royce Rowan (RevOps)
 **Project direction:** Gary / Ashley · **Operational lead:** Jenna Fontanez · **Copy/QA:** Joanne Sandoval
-**Status:** Spec — pending Log-object confirmation + pilot data
+**Status:** Spec — Log schema confirmed; pending pilot data + copy
 **Last updated:** 2026-07-30
 
 ---
@@ -22,7 +22,7 @@ integration. That descope is what makes an end-of-summer launch realistic.
 ### Decisions locked
 | # | Decision |
 |---|---|
-| 1 | Nomination records reuse the existing custom **Log** object (`log type` = Referral / new nomination value — TBC). |
+| 1 | Nomination records reuse the existing custom **Log** object: `log_type` = Referral, `referral_type` = **Student Nomination** (both already exist). |
 | 2 | Outreach **emails send from Joanne** (single sender); **call tasks are divvied** to the contractor/callers via workflow. |
 | 3 | Student follow-up on consent = Yes → **both** an automated "apply" email **and** a rep task (backup). |
 | 4 | **Call logic stays simple for the pilot** — calls are plain sequence tasks; **no** branching on call outcome. |
@@ -43,44 +43,56 @@ integration. That descope is what makes an end-of-summer launch realistic.
 
 ## 3. Data model
 
-### 3.1 Custom Log object (the "nomination record")
-Reuse the existing referral Log. **TO CONFIRM (Royce)** — I can't introspect the custom object via
-the current tooling, so confirm before cloning:
-- Does `log type` already have a **"Faculty Nomination"** option, or do we ride the existing **"Referral"** value?
-- Which fields live **on the Log** vs. **on the Contact**?
-- Anything on the current referral workflow to change vs. clone as-is?
+**Confirmed from the Log + Chapter property exports (2026-07-30).** The nomination record is the
+existing custom **Log** object (type `2-1484012`), which already models referrals — no new object,
+no new field namespace needed.
 
-The Log is the connector: `Professor (contact) ↔ Log ↔ Student (contact)`.
+### 3.1 The Log object (the "nomination record")
+- **Classification (already exists):** `log_type` = **Referral**; `referral_type` = **Student Nomination**
+  (options: NSLS Employee / Student Nomination / CS Referral). Faculty nominations ride this exact value.
+- **The Log is the connector:** `Professor (contact) ↔ Log ↔ Student (contact)`, and associates to the
+  **Chapter** object (`2-1363395`, `chapter_name` + `hs_object_id`) for the school.
+- **Referrer/referee fields are on the Log** (group `cs:_chapter_referrals`). A matching `referee_*` set
+  also exists on the Contact (form capture); the workflow copies to the Log record.
 
-### 3.2 Contact properties — Professor (the submitter / nominator)
-| Field | HubSpot property | Notes |
+### 3.2 Field map — Faculty (the referrer) → Log
+| Nomination field | Log property | Status |
 |---|---|---|
-| First / last name | `firstname` / `lastname` | existing |
-| Email | `email` | existing — dedupe key |
-| Phone | `phone` | existing |
-| Title / role | `jobtitle` | existing |
-| Institution | `school` (+ company association) | existing |
-| Department / program | `department` | **new custom field** |
+| Faculty first / last name | `referrer_first_name` / `referrer_last_name` | existing |
+| Email | `referrer_email` | existing — dedupe key |
+| Title / role | `referrer_job_title` | existing |
+| Institution | `referrer_company_name` | existing |
+| Department / program | — | **gap → add field or fold into note** |
+| Phone | — | **gap** (no `referrer_phone` today) |
 
-### 3.3 Contact properties — Student (the nominee / "referee")
-| Field | HubSpot property | Notes |
+### 3.3 Field map — Student (the referee / nominee) → Log
+| Nomination field | Log property | Status |
 |---|---|---|
-| First / last name | `referee_first_name` / `referee_last_name` | existing |
+| Student first / last name | `referee_first_name` / `referee_last_name` | existing |
 | Email | `referee_email` | existing — dedupe key |
 | Phone | `referee_phone` | existing |
 | School | `referee_school` | existing |
-| Major / field of study | `major` | existing |
 | How prof knows student | `referee_relationship` | existing |
-| Why nominated (context) | `referee_blurb` | existing |
-| Academic standing | `academic_standing` | **new custom field** (dropdown) |
-| OK for NSLS to contact student? | `contact_consent` | **new custom field** (Yes / No–I'll forward) |
+| Why nominated (context) | `referee_blurb` (+ `referee_blurb_options`) | existing |
+| Major / field of study | — | **gap → add field or fold into `referee_blurb`** |
+| Academic standing | — | **gap → add field or fold into `referee_blurb`** |
+| OK for NSLS to contact student? | — | **gap → add consent field** |
 
-### 3.4 New properties to create (Tier 1)
-- `department` (contact, single-line text)
-- `academic_standing` (contact, dropdown: First-year / Sophomore / Junior / Senior / Graduate / Unsure)
-- `contact_consent` (contact, dropdown: Yes / No – I'll forward)
-- `outreach_angle` (contact, multi-line text) — imported per-professor personalization snippet (see §6)
-- Confirm/extend the Log `log type` option for nominations.
+### 3.4 Process fields (already on the Log)
+- `log_type` = Referral · `referral_type` = Student Nomination
+- `referral_approval_status` (Pending → Approved) — nomination review state
+- `referral_rewards_program` — N/A for faculty nominations (leave blank)
+- `associated_contacts` (rollup) — the professor↔student connector count
+
+### 3.5 New properties to add (small — the only true gaps)
+Add to the Log (group `cs:_chapter_referrals`) so nothing is lost on import:
+- `referee_major` (text)
+- `referee_academic_standing` (dropdown: First-year / Sophomore / Junior / Senior / Graduate / Unsure)
+- `referee_contact_consent` (dropdown: Yes / No – I'll forward)
+- `referrer_department` (text)  ·  `referrer_phone` (text) — optional
+- `outreach_angle` (contact, multi-line) — imported per-professor personalization snippet (see §6)
+
+For the manual pilot, these four can also just live in `referee_blurb` free text until the fields exist.
 
 ---
 
@@ -174,16 +186,19 @@ auto-unenroll on form submit (confirm tier) · contractor recorded-calling setup
 
 ## 10. Timeline
 
-- **Build effort is small** — most of it is cloning the referral assets you already run.
-  Tier 1 + Tier 2 core are buildable in days once the Log schema is confirmed and copy is locked.
+- **Build effort is small** — the data model already exists (`referral_type` = Student Nomination on
+  the Log). The work is: add 3–4 gap fields, clone/point the form + workflow at that type, build the
+  sequence. Buildable in days once copy is locked.
 - **Launch is gated on the pilot data export (Joanne) and Marketing copy**, not the build.
 - Target: live before faculty ramp back up in **August**.
 
 ---
 
 ## 11. Open items to confirm
-1. Log object: `log type` value for nominations + Log-vs-Contact field split (Royce).
-2. Form host: landing-page embed vs. standalone.
-3. Auto-unenroll-on-submit: confirm Sales Hub tier supports the workflow action.
-4. Call-task divvy split (what % to contractor vs. Joanne).
-5. Current build status — anything already stood up from the June "workflow thing."
+1. ~~Log object schema~~ — **resolved** (Log `2-1484012`, `referral_type` = Student Nomination, full
+   `referrer_*`/`referee_*` set). Confirm whether any nomination Logs already exist from prior use.
+2. Add the gap fields (§3.5) or fold into `referee_blurb` for the pilot.
+3. Form host: landing-page embed vs. standalone.
+4. Auto-unenroll-on-submit: confirm Sales Hub tier supports the workflow action.
+5. Call-task divvy split (what % to contractor vs. Joanne).
+6. Current build status — anything already stood up from the June "workflow thing."
