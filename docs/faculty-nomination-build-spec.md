@@ -37,7 +37,9 @@ integration. That descope is what makes an end-of-summer launch realistic.
 - Faculty FAQ (attach to Email 1): `2026 NSLS Fellowship — Faculty FAQ`
 - Campaign tracker (Jenna): `Fellowship Recruitment Campaign - Tracker.docx`
 - Existing model: `CS: Referral Program` form (HubSpot form id `1b176d2f-86a1-4aae-818d-92000d010b7b`)
+- Existing workflow: `Referral Program - Log, Create Contact, Email, Task` (id `493077772`)
 - 6/23 call: RevOps Request Review — HubSpot Sequence Build (Fellowship Recruiting)
+- **Manual tracker** (import-ready, columns mapped to the Log fields): https://docs.google.com/spreadsheets/d/14SLzX7QzVHLUohwg5vH7tTun4DtI12G6IJ9KKXV2I1A/edit
 
 ---
 
